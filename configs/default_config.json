@@ -1,0 +1,18 @@
+{
+    "epoch": 50,
+    "lr": 0.0001,
+    "bs": 8,
+    "loss_type": "combined",
+    "dice_weight": 0.5,
+    "ce_weight": 0.5,
+    "val_freq": 1,
+    "save_freq": 5,
+    "num_workers": 4,
+    "use_gpu": true,
+    "val_ratio": 0.2,
+    "random_seed": 42,
+    "logdir": "./logs/",
+    "dataset_root": "./dataset_split"
+}
+
+

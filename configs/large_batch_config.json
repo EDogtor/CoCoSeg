@@ -1,0 +1,19 @@
+{
+    "epoch": 50,
+    "lr": 0.0002,
+    "bs": 16,
+    "loss_type": "combined",
+    "dice_weight": 0.6,
+    "ce_weight": 0.4,
+    "val_freq": 2,
+    "save_freq": 5,
+    "num_workers": 8,
+    "use_gpu": true,
+    "val_ratio": 0.2,
+    "random_seed": 42,
+    "logdir": "./logs/",
+    "dataset_root": "./dataset_split",
+    "备注": "大批次训练配置，适合显存充足的情况"
+}
+
+
