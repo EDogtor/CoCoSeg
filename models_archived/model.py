@@ -162,9 +162,8 @@ class DualIndependentEncoderUNet(nn.Module):
     架构设计：
     1. CT和PET分别输入两个独立的UNet编码器（非共享权重）
     2. VGG编码器已关闭（可选，当前不使用）
-    3. 在融合特征和跳跃连接中使用CAM模块（MAM注意力）增强特征
-       - 对CT和PET的UNet编码器特征分别应用通道注意力（融合前）
-       - 对解码器上采样特征也应用通道注意力（跳跃连接中）
+    3. 在跳跃连接中使用MAM模块（CAM注意力）增强特征
+       - 对CT和PET的UNet特征分别应用通道注意力
        - 自适应选择重要通道，提升融合效果
     4. 采用中期融合（Mid-Level Fusion）
        - 在4个层级（32, 64, 128, 256通道）进行CT-PET特征融合
@@ -182,17 +181,11 @@ class DualIndependentEncoderUNet(nn.Module):
         self.ct_unet_encoder = UNetEncoder()
         self.pet_unet_encoder = UNetEncoder()
         
-        # ========== CAM注意力模块（MAM）- 用于融合特征和跳跃连接中的注意力增强 ==========
-        # 用于编码器特征的CAM（融合前）
+        # ========== CAM注意力模块（MAM）- 用于跳跃连接中的注意力增强 ==========
         self.cam_32 = CAM_Module(32)
         self.cam_64 = CAM_Module(64)
         self.cam_128 = CAM_Module(128)
         self.cam_256 = CAM_Module(256)
-        
-        # 用于解码器特征的CAM（跳跃连接中）
-        self.cam_decoder_128 = CAM_Module(128)  # 用于256→128跳跃连接
-        self.cam_decoder_64 = CAM_Module(64)     # 用于128→64跳跃连接
-        self.cam_decoder_32 = CAM_Module(32)     # 用于64→32跳跃连接
         
         p = 1
         
@@ -289,11 +282,8 @@ class DualIndependentEncoderUNet(nn.Module):
         att_7 = torch.cat([ct_unet_out, pet_unet_out], 1)  # 128*2 = 256
         att_7 = self.att_deconv7(att_7)  # 256 -> 128
         
-        # 跳跃连接：对解码器上采样特征应用CAM注意力
-        decoder_128, _ = self.cam_decoder_128(self.deconv6(conv6))  # 解码器128通道特征增强
-        
-        # 解码器第1层：上采样特征（CAM增强）+ 融合特征
-        up7 = torch.cat([decoder_128, att_7], 1)  # 128 + 128 = 256
+        # 解码器第1层：上采样特征 + 融合特征
+        up7 = torch.cat([self.deconv6(conv6), att_7], 1)  # 128 + 128 = 256
         x = self.bn7_1(self.LReLU7_1(self.conv7_1(up7)))  # 256 -> 128
         conv7 = self.bn7_2(self.LReLU7_2(self.conv7_2(x)))  # 128
         
@@ -309,11 +299,8 @@ class DualIndependentEncoderUNet(nn.Module):
         att_8 = torch.cat([ct_unet_out, pet_unet_out], 1)  # 64*2 = 128
         att_8 = self.att_deconv8(att_8)  # 128 -> 64
         
-        # 跳跃连接：对解码器上采样特征应用CAM注意力
-        decoder_64, _ = self.cam_decoder_64(self.deconv7(conv7))  # 解码器64通道特征增强
-        
-        # 解码器第2层：上采样特征（CAM增强）+ 融合特征
-        up8 = torch.cat([decoder_64, att_8], 1)  # 64 + 64 = 128
+        # 解码器第2层：上采样特征 + 融合特征
+        up8 = torch.cat([self.deconv7(conv7), att_8], 1)  # 64 + 64 = 128
         x = self.bn8_1(self.LReLU8_1(self.conv8_1(up8)))  # 128 -> 64
         conv8 = self.bn8_2(self.LReLU8_2(self.conv8_2(x)))  # 64
         
@@ -325,11 +312,8 @@ class DualIndependentEncoderUNet(nn.Module):
         ct_unet_out, _ = self.cam_32(ct_conv1)  # CT UNet 32
         pet_unet_out, _ = self.cam_32(pet_conv1)  # PET UNet 32
         
-        # 跳跃连接：对解码器上采样特征应用CAM注意力
-        decoder_32, _ = self.cam_decoder_32(self.deconv8(conv8))  # 解码器32通道特征增强
-        
-        # 融合解码器特征（CAM增强）+ CT和PET的最浅层特征（使用注意力增强后的UNet特征）
-        up9 = torch.cat([decoder_32, ct_unet_out, pet_unet_out], 1)  # 32 + 32 + 32 = 96
+        # 融合CT和PET的最浅层特征（使用注意力增强后的UNet特征）
+        up9 = torch.cat([self.deconv8(conv8), ct_unet_out, pet_unet_out], 1)  # 32 + 32 + 32 = 96
         x = self.bn9_1(self.LReLU9_1(self.conv9_1(up9)))  # 96 -> 32
         conv9 = self.LReLU9_2(self.conv9_2(x))  # 32
         
